@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}RSI Ladder Backtest{% endblock %}
+{% block content %}
+
+    <section class="field-block">
+      <label for="strategy">Strategy</label>
+      <select id="strategy">
+        <option value="topbot" selected>Topbot (RSI next-window prediction, no retry)</option>
+      </select>
+      <p class="desc">
+        Reads recorded candles for the selected symbol and timeframe and computes RSI for every one.
+        Whenever RSI rises above the overbought level, the <strong>next</strong> window is predicted to resolve
+        Down; below the oversold level, the next window is predicted to resolve Up. Each window is an
+        independent decision — there is no retry ladder, a miss is simply a loss. Win rate is measured over
+        fully-decided windows, excluding a still-open trailing signal at the very end of the data.
+      </p>
+    </section>
+
+    <section class="panel">
+      <div class="row two-col">
+        <div class="field-block">
+          <label for="symbol">Symbol</label>
+          <select id="symbol">
+            {% for s in symbols %}
+            <option value="{{ s }}" {% if s == 'ETH' %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field-block">
+          <label for="timeframe">Timeframe</label>
+          <select id="timeframe">
+            {% for t in timeframes %}
+            <option value="{{ t }}" {% if t == '5m' %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="meta-line">
+        <span>Candles available: <strong id="candleCount">–</strong></span>
+        <span>Available range: <strong id="candleRange">–</strong></span>
+        <span id="metaError" class="meta-error"></span>
+      </div>
+
+      <div class="row date-row">
+        <div class="field-block">
+          <label for="fromDate">From</label>
+          <input type="date" id="fromDate" value="{{ default_start }}" />
+        </div>
+        <div class="field-block">
+          <label for="toDate">To</label>
+          <input type="date" id="toDate" value="{{ default_end }}" />
+        </div>
+        <button id="useFullRange" class="btn-secondary">Use full range</button>
+      </div>
+
+      <div class="row params-row">
+        <div class="field-block narrow">
+          <label for="rsiLength">RSI length</label>
+          <input type="number" id="rsiLength" value="7" min="2" max="100" />
+        </div>
+        <div class="field-block narrow">
+          <label for="overbought">Overbought (predict Down)</label>
+          <input type="number" id="overbought" value="86" min="1" max="99" />
+        </div>
+        <div class="field-block narrow">
+          <label for="oversold">Oversold (predict Up)</label>
+          <input type="number" id="oversold" value="16" min="1" max="99" />
+        </div>
+        <button id="runBacktest" class="btn-primary">Run backtest</button>
+      </div>
+    </section>
+
+    <section id="summaryPanel" class="summary-panel" hidden>
+      <h3>Summary</h3>
+      <div class="summary-row">
+        <span class="summary-item">Win rate <strong id="winRate" class="win-rate">–</strong></span>
+        <span class="summary-item">Signals <strong id="totalSignals">–</strong></span>
+        <span class="summary-item">Wins <strong id="wins">–</strong></span>
+        <span class="summary-item">Losses <strong id="losses">–</strong></span>
+        <span class="summary-item">Incomplete <strong id="incomplete">–</strong></span>
+      </div>
+      <p class="desc">
+        Win rate is decided wins over (wins + losses); each signal is one independent window, resolved by
+        whether the very next window closes above (Up) or below (Down) its own open. "Incomplete" is a
+        trailing signal at the end of the loaded data with no next window yet to resolve it.
+      </p>
+    </section>
+
+    <section id="tradesPanel" class="panel trades-panel" hidden>
+      <div class="trades-header">
+        <h3>Trade list</h3>
+        <span class="desc" id="tradesCount"></span>
+      </div>
+      <div class="trades-scroll">
+        <table class="trades-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Time (ET)</th>
+              <th>RSI</th>
+              <th>Prediction</th>
+              <th>Actual</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="tradesBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="errorPanel" class="error-panel" hidden></section>
+
+{% endblock %}
+{% block extra_scripts %}
+  <script src="{{ url_for('static', filename='app.js') }}"></script>
+{% endblock %}

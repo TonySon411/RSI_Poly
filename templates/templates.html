@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}Templates{% endblock %}
+{% block content %}
+
+    <section class="templates-header">
+      <h2>Templates</h2>
+      <button id="newTemplateBtn" class="btn-primary">New template</button>
+    </section>
+
+    <section class="panel templates-panel">
+      <table class="templates-table">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th>Config</th>
+            <th>Status</th>
+            <th>Result so far</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="templatesBody">
+          <tr><td colspan="5" class="desc">Loading…</td></tr>
+        </tbody>
+      </table>
+      <p id="emptyState" class="desc" hidden>
+        No templates yet. Click "New template" to start a live paper-trading RSI bot against real Polymarket markets.
+      </p>
+    </section>
+
+    <div id="modalOverlay" class="modal-overlay" hidden>
+      <div class="modal">
+        <h3 id="modalTitle">New template</h3>
+        <div class="field-block">
+          <label for="tplName">Name</label>
+          <input type="text" id="tplName" placeholder="e.g. ETH 5m ladder" />
+        </div>
+        <div class="row two-col">
+          <div class="field-block">
+            <label for="tplSymbol">Symbol</label>
+            <select id="tplSymbol">
+              {% for s in symbols %}
+              <option value="{{ s }}">{{ s }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="field-block">
+            <label for="tplTimeframe">Timeframe</label>
+            <select id="tplTimeframe">
+              {% for t in timeframes %}
+              <option value="{{ t }}">{{ timeframe_labels[t] }} ({{ t }})</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+        <div class="row params-row">
+          <div class="field-block narrow">
+            <label for="tplRsiLength">RSI length</label>
+            <input type="number" id="tplRsiLength" value="7" min="2" max="100" />
+          </div>
+          <div class="field-block narrow">
+            <label for="tplOverbought">Overbought (buy Down)</label>
+            <input type="number" id="tplOverbought" value="86" min="1" max="99" />
+          </div>
+          <div class="field-block narrow">
+            <label for="tplOversold">Oversold (buy Up)</label>
+            <input type="number" id="tplOversold" value="16" min="1" max="99" />
+          </div>
+        </div>
+        <p class="desc">
+          On each RSI signal, this places topbot's standard 5-rung paper ladder (0.50/0.40/0.30/0.20/0.10) on the
+          real Polymarket "{symbol}-updown-{timeframe}" market, simulating fills against the live order book.
+          No retry ladder — a miss is just a loss. Starts running in paper mode immediately on save.
+        </p>
+        <div class="modal-actions">
+          <button id="modalCancel" class="btn-secondary">Cancel</button>
+          <button id="modalSave" class="btn-primary">Save &amp; start</button>
+        </div>
+        <p id="modalError" class="meta-error"></p>
+      </div>
+    </div>
+
+{% endblock %}
+{% block extra_scripts %}
+  <script src="{{ url_for('static', filename='templates.js') }}"></script>
+{% endblock %}

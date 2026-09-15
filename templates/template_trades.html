@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}{{ template.name }} — Trades{% endblock %}
+{% block content %}
+
+    <section class="templates-header">
+      <h2>{{ template.name }}</h2>
+      <a href="{{ url_for('templates_bp.templates_page') }}" class="btn-secondary">Back to Templates</a>
+    </section>
+
+    <section id="summaryPanel" class="summary-panel">
+      <h3>Summary</h3>
+      <div class="summary-row">
+        <span class="summary-item">PnL <strong id="pnlSum" class="win-rate">–</strong></span>
+        <span class="summary-item">Markets <strong id="marketsCount">–</strong></span>
+        <span class="summary-item">Win rate <strong id="winRate">–</strong></span>
+        <span class="summary-item">Wins <strong id="wins">–</strong></span>
+        <span class="summary-item">Losses <strong id="losses">–</strong></span>
+      </div>
+      <p class="desc" id="configSummary"></p>
+    </section>
+
+    <section id="tradesPanel" class="panel trades-panel">
+      <div class="trades-header">
+        <h3>Trade list</h3>
+        <span class="desc" id="tradesCount"></span>
+      </div>
+      <div class="trades-scroll">
+        <table class="trades-table">
+          <thead>
+            <tr>
+              <th>Window start (ET)</th>
+              <th>RSI</th>
+              <th>Side</th>
+              <th>Filled shares</th>
+              <th>Cost</th>
+              <th>Resolution</th>
+              <th>PnL</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="tradesBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+{% endblock %}
+{% block extra_scripts %}
+  <script>window.TEMPLATE_ID = {{ template.id | tojson }};</script>
+  <script src="{{ url_for('static', filename='template_trades.js') }}"></script>
+{% endblock %}

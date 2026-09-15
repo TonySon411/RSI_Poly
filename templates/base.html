@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{% block title %}RSI Trading Dashboard{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  {% block extra_head %}{% endblock %}
+</head>
+<body>
+  <nav class="topnav">
+    <a href="{{ url_for('templates_bp.templates_page') }}"
+       class="{{ 'active' if active_tab == 'templates' else '' }}">Templates</a>
+    <a href="{{ url_for('backtest_page') }}"
+       class="{{ 'active' if active_tab == 'backtest' else '' }}">Backtest</a>
+  </nav>
+  <div class="page">
+    {% block content %}{% endblock %}
+  </div>
+  {% block extra_scripts %}{% endblock %}
+</body>
+</html>
