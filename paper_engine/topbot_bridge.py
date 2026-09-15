@@ -9,13 +9,34 @@ no credentials required.
 
 from __future__ import annotations
 
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-TOPBOT_SRC = Path(r"D:\polymarket\topbot\src")
-if TOPBOT_SRC.is_dir() and str(TOPBOT_SRC) not in sys.path:
-    sys.path.insert(0, str(TOPBOT_SRC))
+
+def _resolve_topbot_src() -> Path:
+    override = os.environ.get("TOPBOT_SRC")
+    if override:
+        return Path(override)
+    # Default: topbot is a sibling directory of this project
+    # (<parent>/RSI + <parent>/topbot) -- portable across OS/deploy layout as
+    # long as both projects are cloned side by side. Override with the
+    # TOPBOT_SRC env var if that's not how a given server is laid out.
+    return Path(__file__).resolve().parent.parent.parent / "topbot" / "src"
+
+
+TOPBOT_SRC = _resolve_topbot_src()
+if TOPBOT_SRC.is_dir():
+    if str(TOPBOT_SRC) not in sys.path:
+        sys.path.insert(0, str(TOPBOT_SRC))
+else:
+    print(
+        f"[paper_engine] WARNING: topbot source not found at {TOPBOT_SRC} -- "
+        "set the TOPBOT_SRC env var to its src/ directory, or clone topbot as "
+        "a sibling of this project. Templates and the tick recorder will fail "
+        "to import until this is fixed."
+    )
 
 from topbot.config import Config, LadderRung  # noqa: E402
 from topbot.polymarket.executor import PaperExecutor  # noqa: E402

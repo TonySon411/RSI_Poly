@@ -15,6 +15,7 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
 
 from flask import Flask, jsonify, render_template, request
 
+from live_backtest.engine import recording_coverage, run_live_backtest
 from paper_engine import store as template_store
 from paper_engine.resolver import resolver as pending_resolver
 from paper_engine.routes import manager as template_manager
@@ -22,6 +23,7 @@ from paper_engine.routes import templates_bp
 from rsi_backtest.backtest import run_backtest
 from rsi_backtest.config import SYMBOLS, TIMEFRAMES
 from rsi_backtest.data_store import cache_bounds, ensure_data, load_range
+from tick_recorder.manager import TIMEFRAMES as TICK_TIMEFRAMES
 from tick_recorder.manager import manager as tick_recorder_manager
 
 app = Flask(__name__)
@@ -109,6 +111,68 @@ def api_backtest():
 
     df = load_range(symbol, timeframe, DATA_START, to_ms)
     result = run_backtest(df, from_ms, to_ms, rsi_length, overbought, oversold)
+    result["symbol"] = symbol
+    result["timeframe"] = timeframe
+    return jsonify(result)
+
+
+@app.route("/live-backtest")
+def live_backtest_page():
+    return render_template(
+        "live_backtest.html",
+        symbols=SYMBOLS,
+        timeframes=TICK_TIMEFRAMES,
+        default_start=_ms_to_date(DATA_START),
+        default_end=_ms_to_date(_now_ms()),
+        active_tab="live_backtest",
+    )
+
+
+@app.route("/api/live-backtest/meta")
+def api_live_backtest_meta():
+    symbol = request.args.get("symbol", SYMBOLS[0])
+    timeframe = request.args.get("timeframe", "5m")
+
+    coverage = recording_coverage(symbol, timeframe)
+    return jsonify(
+        {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "count": coverage["count"],
+            "resolved_count": coverage["resolved_count"],
+            "range_from": (
+                dt.datetime.fromtimestamp(coverage["range_from"], tz=dt.timezone.utc).isoformat()
+                if coverage["range_from"]
+                else None
+            ),
+            "range_to": (
+                dt.datetime.fromtimestamp(coverage["range_to"], tz=dt.timezone.utc).isoformat()
+                if coverage["range_to"]
+                else None
+            ),
+        }
+    )
+
+
+@app.route("/api/live-backtest", methods=["POST"])
+def api_live_backtest():
+    payload = request.get_json(force=True)
+
+    symbol = payload["symbol"]
+    timeframe = payload["timeframe"]
+    rsi_length = int(payload["rsi_length"])
+    overbought = float(payload["overbought"])
+    oversold = float(payload["oversold"])
+    from_ms = _date_to_ms(payload["from_date"])
+    to_ms = _date_to_ms(payload["to_date"], end_of_day=True)
+
+    try:
+        ensure_data(symbol, timeframe, DATA_START, _now_ms())
+    except Exception:
+        pass  # use whatever Bybit candles are cached locally (RSI source only)
+
+    df = load_range(symbol, timeframe, DATA_START, to_ms)
+    result = run_live_backtest(df, symbol, timeframe, from_ms, to_ms, rsi_length, overbought, oversold)
     result["symbol"] = symbol
     result["timeframe"] = timeframe
     return jsonify(result)

@@ -45,3 +45,9 @@
 {"ts": "2026-09-15T14:00:00+00:00", "mode": "paper", "window_start": 1789480800, "window_end": 1789481700, "rsi": 46.387181638256926, "rsi_side": null, "side": null, "is_retry": false, "skipped": true}
 {"ts": "2026-09-15T14:15:00+00:00", "mode": "paper", "window_start": 1789481700, "window_end": 1789482600, "rsi": 26.832687808544947, "rsi_side": null, "side": null, "is_retry": false, "skipped": true}
 {"ts": "2026-09-15T14:30:00+00:00", "mode": "paper", "window_start": 1789482600, "window_end": 1789483500, "rsi": 22.871933196190014, "rsi_side": null, "side": null, "is_retry": false, "skipped": true}
+{"ts": "2026-09-15T15:15:00+00:00", "mode": "paper", "window_start": 1789485300, "window_end": 1789486200, "rsi": 24.85515304224218, "rsi_side": null, "side": null, "is_retry": false, "skipped": true}
+{"ts": "2026-09-15T15:30:00+00:00", "mode": "paper", "window_start": 1789486200, "window_end": 1789487100, "rsi": 30.952109431526807, "rsi_side": null, "side": null, "is_retry": false, "skipped": true}
+{"ts": "2026-09-15T15:45:00+00:00", "mode": "paper", "window_start": 1789487100, "window_end": 1789488000, "rsi": 30.461765993414744, "rsi_side": null, "side": null, "is_retry": false, "skipped": true}
+{"ts": "2026-09-15T16:00:00+00:00", "mode": "paper", "window_start": 1789488000, "window_end": 1789488900, "rsi": 28.087196563086792, "rsi_side": null, "side": null, "is_retry": false, "skipped": true}
+{"ts": "2026-09-15T16:15:00+00:00", "mode": "paper", "window_start": 1789488900, "window_end": 1789489800, "rsi": 23.385944145063704, "rsi_side": null, "side": null, "is_retry": false, "skipped": true}
+{"ts": "2026-09-15T16:30:00+00:00", "mode": "paper", "window_start": 1789489800, "window_end": 1789490700, "rsi": 34.874626804986605, "rsi_side": null, "side": null, "is_retry": false, "skipped": true}
