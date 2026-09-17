@@ -1,23 +1,33 @@
 # Deploying the RSI dashboard with PM2
 
-This is a Flask process (`python app.py`) that also runs its background
-template threads, pending-resolution resolver, and 14 tick recorders in the
-same process. PM2 doesn't know Python natively, so we point it directly at
-the virtualenv's `python` binary and let PM2 treat it like any other
+This is **two separate Flask/Python processes**, run as two PM2 apps:
+
+- `rsi-dashboard` (`python app.py`) — the dashboard itself, plus its
+  background template threads and pending-resolution resolver.
+- `rsi-recorder` (`python recordData.py`) — the 14 Polymarket tick recorders,
+  run independently so they keep recording regardless of the dashboard
+  process's own restarts/crashes, and so nothing ever double-records into
+  the same files.
+
+PM2 doesn't know Python natively, so we point it directly at the
+virtualenv's `python` binary for each and let PM2 treat them like any other
 long-running process — restart on crash, log capture, startup-on-boot.
 
 This guide assumes a Linux server (Ubuntu/Debian). Adjust paths for other
 distros.
 
-## ⚠️ Single instance only
+## ⚠️ Single instance only (each app)
 
 Templates, the pending resolver, and the tick recorder are all in-process
 singletons (module-level thread registries, one shared SQLite connection).
-**Never run this under PM2 cluster mode or with `instances` > 1** — each
-extra instance would independently resume every template and open its own
-duplicate set of 14 Polymarket websocket connections, double- (or N-)
-counting every trade. `ecosystem.config.js` already pins `instances: 1` and
-`exec_mode: "fork"` — don't change that.
+**Never run either app under PM2 cluster mode or with `instances` > 1** —
+an extra `rsi-dashboard` instance would independently resume every template,
+double-counting every trade; an extra `rsi-recorder` instance would open a
+second duplicate set of 14 Polymarket websocket connections, writing
+conflicting data into the same JSON files. `ecosystem.config.js` already
+pins `instances: 1` and `exec_mode: "fork"` for both — don't change that,
+and never run `python app.py`/`python recordData.py` by hand on the server
+at the same time as their PM2-managed copies.
 
 ## 1. Prerequisites (on the server)
 
@@ -102,33 +112,10 @@ slow.
 
 ## 6. Start it under PM2
 
-The repo includes `ecosystem.config.js`:
+The repo includes `ecosystem.config.js`, defining both apps (`rsi-dashboard`
+and `rsi-recorder`) — see the file itself for the full config.
 
-```js
-module.exports = {
-  apps: [
-    {
-      name: "rsi-dashboard",
-      cwd: __dirname,
-      script: ".venv/bin/python",
-      args: "app.py",
-      interpreter: "none",
-      instances: 1,
-      exec_mode: "fork",
-      autorestart: true,
-      restart_delay: 5000,
-      max_restarts: 10,
-      env: { PYTHONUNBUFFERED: "1" },
-      out_file: "logs/pm2-out.log",
-      error_file: "logs/pm2-error.log",
-      merge_logs: true,
-      time: true,
-    },
-  ],
-};
-```
-
-Start it:
+Start both:
 
 ```bash
 pm2 start ecosystem.config.js
@@ -139,12 +126,14 @@ Verify:
 ```bash
 pm2 status
 pm2 logs rsi-dashboard
+pm2 logs rsi-recorder
 ```
 
-You should see Flask's startup lines, `[tick_recorder] started 14
-recorders...`, and (once any templates exist) their window-by-window
-activity. Any templates already marked `running` in `data/templates.db`
-resume automatically.
+`rsi-dashboard`'s logs should show Flask's startup lines and (once any
+templates exist) their window-by-window activity — any templates already
+marked `running` in `data/templates.db` resume automatically.
+`rsi-recorder`'s logs should show `[tick_recorder] started 14 recorders...`
+followed by each market's `recording`/`resolved` lines.
 
 The dashboard listens on port **8008** on all interfaces
 (`0.0.0.0:8008`) — open that port in your firewall/security group, or put
@@ -161,17 +150,21 @@ pm2 startup           # prints a systemd command — copy/paste and run it once
 
 | Task | Command |
 |---|---|
-| Tail live logs | `pm2 logs rsi-dashboard` |
+| Tail live logs | `pm2 logs rsi-dashboard` / `pm2 logs rsi-recorder` |
 | Check status / uptime / restarts | `pm2 status` |
-| Restart (e.g. after a code change) | `pm2 restart rsi-dashboard` |
-| Stop | `pm2 stop rsi-dashboard` |
-| Remove from PM2's list | `pm2 delete rsi-dashboard` |
+| Restart dashboard (e.g. after a code change) | `pm2 restart rsi-dashboard` |
+| Restart recorder | `pm2 restart rsi-recorder` |
+| Restart both | `pm2 restart rsi-dashboard rsi-recorder` |
+| Stop | `pm2 stop rsi-dashboard rsi-recorder` |
+| Remove from PM2's list | `pm2 delete rsi-dashboard rsi-recorder` |
 | Live CPU/memory monitor | `pm2 monit` |
 
-Stopping/restarting only pauses the process — every template's config and
-full trade history stays in `data/templates.db` and resumes exactly where
-it left off (any templates that were `running` restart automatically; ones
-you'd stopped stay stopped).
+Restarting `rsi-dashboard` does **not** interrupt `rsi-recorder` (they're
+independent processes) — recording keeps running across dashboard restarts,
+and vice versa. Stopping/restarting `rsi-dashboard` only pauses templates —
+every template's config and full trade history stays in `data/templates.db`
+and resumes exactly where it left off (any templates that were `running`
+restart automatically; ones you'd stopped stay stopped).
 
 ## 9. Deploying an update
 
@@ -181,7 +174,7 @@ git pull
 source .venv/bin/activate
 pip install -r requirements.txt   # only needed if dependencies changed
 deactivate
-pm2 restart rsi-dashboard
+pm2 restart rsi-dashboard rsi-recorder
 ```
 
 If `topbot` itself was updated too, just `git pull` inside `~/polymarket/topbot`
@@ -189,18 +182,23 @@ If `topbot` itself was updated too, just `git pull` inside `~/polymarket/topbot`
 
 ## Troubleshooting
 
-- **`pm2 logs rsi-dashboard` shows `[paper_engine] WARNING: topbot source not
-  found at ...`** — `topbot` isn't where this project expects it. Either
-  clone it as a sibling directory (step 2) or set `TOPBOT_SRC` (step 4), then
-  `pm2 restart rsi-dashboard --update-env`.
+- **`pm2 logs rsi-dashboard`/`rsi-recorder` shows `[paper_engine] WARNING:
+  topbot source not found at ...`** — `topbot` isn't where this project
+  expects it. Either clone it as a sibling directory (step 2) or set
+  `TOPBOT_SRC` (step 4), then `pm2 restart rsi-dashboard rsi-recorder
+  --update-env`.
 - **`ModuleNotFoundError: No module named 'websocket'`** — `pip install -r
   requirements.txt` wasn't run inside `.venv`, or you're invoking a different
   Python than `.venv/bin/python`. Check with `.venv/bin/python -c "import
   websocket, flask, pandas, requests"`.
 - **Templates show duplicate/doubled trades for the same window** — almost
-  certainly running more than one instance (cluster mode, or a second `pm2
-  start` without stopping the first). Run `pm2 status` and make sure exactly
-  one `rsi-dashboard` process exists.
+  certainly running more than one `rsi-dashboard` instance (cluster mode, or
+  a second `pm2 start` without stopping the first). Run `pm2 status` and
+  make sure exactly one `rsi-dashboard` process exists.
+- **Recorded JSON files look corrupted or have inconsistent data** — almost
+  certainly two recorders writing to the same files at once: check `pm2
+  status` for more than one `rsi-recorder` process, and make sure nobody
+  also ran `python recordData.py` by hand on the same server.
 - **Backtest tab is slow on first use** — expected if `fetch_data.py` (step
   5) wasn't run; it's lazily fetching the full Bybit history for whatever
   symbol/timeframe you first select.

@@ -1,0 +1,5 @@
+{
+  "atr_buckets": [
+    { "min_atr": 13.0, "max_atr": 13.5, "overbought": 60, "oversold": 1 }
+  ]
+}

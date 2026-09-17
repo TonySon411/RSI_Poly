@@ -13,6 +13,8 @@
        class="{{ 'active' if active_tab == 'templates' else '' }}">Templates</a>
     <a href="{{ url_for('backtest_page') }}"
        class="{{ 'active' if active_tab == 'backtest' else '' }}">Backtest</a>
+    <a href="{{ url_for('rsi_backtest_page') }}"
+       class="{{ 'active' if active_tab == 'rsi_backtest' else '' }}">ATR Backtest</a>
     <a href="{{ url_for('live_backtest_page') }}"
        class="{{ 'active' if active_tab == 'live_backtest' else '' }}">Live Backtest</a>
   </nav>

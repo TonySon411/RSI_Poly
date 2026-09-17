@@ -10,6 +10,28 @@ from .config import BYBIT_CATEGORY, bybit_symbol
 
 KLINE_URL = "https://api.bybit.com/v5/market/kline"
 PAGE_LIMIT = 1000
+MAX_PAGE_ATTEMPTS = 5
+RETRY_DELAY_SEC = 2.0
+
+
+def _get_page(session: requests.Session, params: dict, symbol: str) -> dict:
+    """Fetch one page, retrying on transient network errors (timeouts, resets,
+    etc). A long backfill can be hundreds of pages, so without this a single
+    flaky read wipes out everything fetched so far for that gap."""
+    last_exc: Exception | None = None
+    for attempt in range(1, MAX_PAGE_ATTEMPTS + 1):
+        try:
+            resp = session.get(KLINE_URL, params=params, timeout=20)
+            resp.raise_for_status()
+            payload = resp.json()
+            if payload.get("retCode") != 0:
+                raise RuntimeError(f"Bybit error for {symbol}: {payload.get('retMsg')}")
+            return payload
+        except (requests.exceptions.RequestException, RuntimeError) as exc:
+            last_exc = exc
+            if attempt < MAX_PAGE_ATTEMPTS:
+                time.sleep(RETRY_DELAY_SEC * attempt)
+    raise last_exc  # type: ignore[misc]
 
 
 def fetch_klines(symbol: str, bybit_interval: str, start_ms: int, end_ms: int) -> list[list]:
@@ -34,11 +56,7 @@ def fetch_klines(symbol: str, bybit_interval: str, start_ms: int, end_ms: int) -
             "end": cursor_end,
             "limit": PAGE_LIMIT,
         }
-        resp = session.get(KLINE_URL, params=params, timeout=20)
-        resp.raise_for_status()
-        payload = resp.json()
-        if payload.get("retCode") != 0:
-            raise RuntimeError(f"Bybit error for {symbol}: {payload.get('retMsg')}")
+        payload = _get_page(session, params, symbol)
 
         batch = payload["result"]["list"]
         if not batch:

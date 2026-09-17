@@ -8,10 +8,10 @@ A Flask dashboard with three parts, all served from `python app.py` on
    their win rate / PnL accumulate in real time.
 2. **Backtest** (`/backtest`) — backtest the same RSI strategy against
    historical Bybit candles, across any symbol/timeframe combination.
-3. **Tick recorder** (background, no UI yet) — continuously records real
-   Polymarket order-book price ticks via WebSocket, for a future backtest
-   mode that replays real market prices instead of just Bybit candle
-   direction.
+3. **Tick recorder** (`recordData.py`, its own separate process, no UI yet)
+   — continuously records real Polymarket order-book price ticks via
+   WebSocket, for a backtest mode that replays real market prices instead of
+   just Bybit candle direction.
 
 This project reuses the existing **`topbot`** project's actual Polymarket
 integration (`D:\polymarket\topbot`) read-only via `sys.path` — see
@@ -76,9 +76,12 @@ locally as CSV under `data/{SYMBOL}_{timeframe}.csv`, and lazily
 extended/top-warmed on every dashboard request — `fetch_data.py` just
 pre-warms the cache so the first click isn't slow.
 
-## 3. Tick recorder
+## 3. Tick recorder (`recordData.py`)
 
-Runs 14 background recorders (7 assets × [5m, 15m]), each with its own
+Its own standalone process (`python recordData.py`) — run it alongside
+`app.py`, not inside it, so recording keeps running independently of the
+dashboard's own lifecycle (and so nothing ever double-records into the same
+files). Runs 14 background recorders (7 assets × [5m, 15m]), each with its own
 persistent WebSocket connection to Polymarket's CLOB market channel
 (`wss://ws-subscriptions-clob.polymarket.com/ws/market`). Every real price
 change (not size-only book churn) is recorded with a timestamp; each market
@@ -112,20 +115,17 @@ python fetch_data.py
 ## Run
 
 ```bash
-python app.py
+python app.py          # dashboard on port 8008; resumes any templates left `running`
+python recordData.py   # separate process: the 14 tick recorders
 ```
-
-Starts the Flask dashboard on port 8008, resumes any templates left
-`running` from a previous session, and starts all 14 tick recorders — all
-in one process, as background threads.
 
 ## Project layout
 
 ```
 app.py                       Flask server: registers the Templates blueprint,
                               the Backtest routes, and starts the background
-                              template manager / pending resolver / tick
-                              recorder manager on startup.
+                              template manager / pending resolver on startup.
+recordData.py                 Standalone tick recorder process (run alongside app.py).
 fetch_data.py                 CLI to bulk-populate the Backtest tab's Bybit cache.
 
 rsi_backtest/

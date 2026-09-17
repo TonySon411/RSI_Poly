@@ -20,11 +20,13 @@ from paper_engine import store as template_store
 from paper_engine.resolver import resolver as pending_resolver
 from paper_engine.routes import manager as template_manager
 from paper_engine.routes import templates_bp
+from rsi_backtest.atr import latest_atr
+from rsi_backtest.atr_backtest import run_atr_backtest
 from rsi_backtest.backtest import run_backtest
 from rsi_backtest.config import SYMBOLS, TIMEFRAMES
 from rsi_backtest.data_store import cache_bounds, ensure_data, load_range
+from rsi_backtest.thresholds import get_thresholds, load_buckets
 from tick_recorder.manager import TIMEFRAMES as TICK_TIMEFRAMES
-from tick_recorder.manager import manager as tick_recorder_manager
 
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
@@ -109,10 +111,66 @@ def api_backtest():
     except Exception:
         pass  # use whatever is cached locally
 
-    df = load_range(symbol, timeframe, DATA_START, to_ms)
+    df = load_range(symbol, timeframe, 0, to_ms)
     result = run_backtest(df, from_ms, to_ms, rsi_length, overbought, oversold)
     result["symbol"] = symbol
     result["timeframe"] = timeframe
+    return jsonify(result)
+
+
+@app.route("/rsi-backtest")
+def rsi_backtest_page():
+    return render_template(
+        "rsi_backtest.html",
+        symbols=SYMBOLS,
+        timeframes=list(TIMEFRAMES.keys()),
+        default_start=_ms_to_date(DATA_START),
+        default_end=_ms_to_date(_now_ms()),
+        buckets=load_buckets(),
+        active_tab="rsi_backtest",
+    )
+
+
+@app.route("/api/rsi-thresholds")
+def api_rsi_thresholds():
+    symbol = request.args.get("symbol", SYMBOLS[0])
+    timeframe = request.args.get("timeframe", "5m")
+    try:
+        atr_length = int(request.args.get("atr_length", 7))
+    except ValueError:
+        return jsonify({"error": "invalid atr_length"}), 400
+
+    df = load_range(symbol, timeframe, 0, _now_ms())
+    atr_value = latest_atr(df, atr_length)
+
+    if atr_value is None:
+        return jsonify({"atr": None, "overbought": None, "oversold": None})
+
+    overbought, oversold = get_thresholds(atr_value)
+    return jsonify({"atr": round(atr_value, 4), "overbought": overbought, "oversold": oversold})
+
+
+@app.route("/api/rsi-backtest", methods=["POST"])
+def api_rsi_backtest():
+    payload = request.get_json(force=True)
+
+    symbol = payload["symbol"]
+    timeframe = payload["timeframe"]
+    rsi_length = int(payload["rsi_length"])
+    atr_length = int(payload.get("atr_length", 7))
+    from_ms = _date_to_ms(payload["from_date"])
+    to_ms = _date_to_ms(payload["to_date"], end_of_day=True)
+
+    try:
+        ensure_data(symbol, timeframe, DATA_START, _now_ms())
+    except Exception:
+        pass  # use whatever is cached locally
+
+    df = load_range(symbol, timeframe, 0, to_ms)
+    result = run_atr_backtest(df, from_ms, to_ms, rsi_length, atr_length)
+    result["symbol"] = symbol
+    result["timeframe"] = timeframe
+    result["atr_length"] = atr_length
     return jsonify(result)
 
 
@@ -171,7 +229,7 @@ def api_live_backtest():
     except Exception:
         pass  # use whatever Bybit candles are cached locally (RSI source only)
 
-    df = load_range(symbol, timeframe, DATA_START, to_ms)
+    df = load_range(symbol, timeframe, 0, to_ms)
     result = run_live_backtest(df, symbol, timeframe, from_ms, to_ms, rsi_length, overbought, oversold)
     result["symbol"] = symbol
     result["timeframe"] = timeframe
@@ -181,7 +239,6 @@ def api_live_backtest():
 template_store.init_db()
 template_manager.resume_all_running()
 pending_resolver.start()
-tick_recorder_manager.start_all()
 
 
 if __name__ == "__main__":

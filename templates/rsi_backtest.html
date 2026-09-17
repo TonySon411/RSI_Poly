@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block title %}ATR Backtest{% endblock %}
+{% block content %}
+
+    <section class="field-block">
+      <label for="strategy">Strategy</label>
+      <select id="strategy">
+        <option value="rsi-config" selected>Topbot (RSI next-window prediction, thresholds from ATR)</option>
+      </select>
+      <p class="desc">
+        Same next-window prediction as the Backtest tab, except the overbought/oversold thresholds are not fixed —
+        each candle picks its own thresholds from <strong>that candle's ATR</strong> (volatility) using the bucket
+        table below (config.json). A calmer, low-ATR market uses a narrower band; a more volatile, high-ATR market
+        needs a much more extreme band to fire at a similar rate.
+      </p>
+    </section>
+
+    <section class="panel">
+      <div class="row two-col">
+        <div class="field-block">
+          <label for="symbol">Symbol</label>
+          <select id="symbol">
+            {% for s in symbols %}
+            <option value="{{ s }}" {% if s == 'ETH' %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="field-block">
+          <label for="timeframe">Timeframe</label>
+          <select id="timeframe">
+            {% for t in timeframes %}
+            <option value="{{ t }}" {% if t == '5m' %}selected{% endif %}>{{ t }}</option>
+            {% endfor %}
+          </select>
+        </div>
+      </div>
+
+      <div class="meta-line">
+        <span>Candles available: <strong id="candleCount">–</strong></span>
+        <span>Available range: <strong id="candleRange">–</strong></span>
+        <span id="metaError" class="meta-error"></span>
+      </div>
+
+      <div class="row date-row">
+        <div class="field-block">
+          <label for="fromDate">From</label>
+          <input type="date" id="fromDate" value="{{ default_start }}" />
+        </div>
+        <div class="field-block">
+          <label for="toDate">To</label>
+          <input type="date" id="toDate" value="{{ default_end }}" />
+        </div>
+        <button id="useFullRange" class="btn-secondary">Use full range</button>
+      </div>
+
+      <div class="row params-row">
+        <div class="field-block narrow">
+          <label for="rsiLength">RSI length</label>
+          <input type="number" id="rsiLength" value="7" min="1" max="100" />
+        </div>
+        <div class="field-block narrow">
+          <label for="atrLength">ATR length</label>
+          <input type="number" id="atrLength" value="7" min="1" max="100" />
+        </div>
+        <div class="field-block narrow">
+          <label>Current ATR</label>
+          <div class="readonly-value" id="currentAtr">–</div>
+        </div>
+        <div class="field-block narrow">
+          <label>Overbought / Oversold now</label>
+          <div class="readonly-value" id="autoThresholds">–</div>
+        </div>
+        <button id="runBacktest" class="btn-primary">Run backtest</button>
+      </div>
+      <p class="desc">
+        "Current ATR" and "now" thresholds are just a live preview computed from the most recent cached candle —
+        the actual backtest recomputes ATR (and its threshold bucket) for every candle in the selected date range.
+      </p>
+    </section>
+
+    <section class="panel">
+      <h3>ATR &rarr; threshold table (config.json)</h3>
+      <table class="trades-table">
+        <thead>
+          <tr>
+            <th>ATR</th>
+            <th>Overbought</th>
+            <th>Oversold</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for b in buckets %}
+          <tr>
+            <td>{{ b.min_atr }}{% if b.max_atr %} – {{ b.max_atr }}{% else %}+{% endif %}</td>
+            <td>{{ b.overbought }}</td>
+            <td>{{ b.oversold }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+
+    <section id="summaryPanel" class="summary-panel" hidden>
+      <h3>Summary</h3>
+      <div class="summary-row">
+        <span class="summary-item">Win rate <strong id="winRate" class="win-rate">–</strong></span>
+        <span class="summary-item">Signals <strong id="totalSignals">–</strong></span>
+        <span class="summary-item">Wins <strong id="wins">–</strong></span>
+        <span class="summary-item">Losses <strong id="losses">–</strong></span>
+        <span class="summary-item">Incomplete <strong id="incomplete">–</strong></span>
+      </div>
+      <p class="desc">
+        Win rate is decided wins over (wins + losses); each signal is one independent window, resolved by
+        whether the very next window closes above (Up) or below (Down) its own open. "Incomplete" is a
+        trailing signal at the end of the loaded data with no next window yet to resolve it.
+      </p>
+    </section>
+
+    <section id="tradesPanel" class="panel trades-panel" hidden>
+      <div class="trades-header">
+        <h3>Trade list</h3>
+        <span class="desc" id="tradesCount"></span>
+      </div>
+      <div class="trades-scroll">
+        <table class="trades-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Time (ET)</th>
+              <th>RSI</th>
+              <th>ATR</th>
+              <th>OB/OS used</th>
+              <th>Prediction</th>
+              <th>Actual</th>
+              <th>Result</th>
+            </tr>
+          </thead>
+          <tbody id="tradesBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section id="errorPanel" class="error-panel" hidden></section>
+
+{% endblock %}
+{% block extra_scripts %}
+  <script src="{{ url_for('static', filename='rsi_backtest.js') }}"></script>
+{% endblock %}

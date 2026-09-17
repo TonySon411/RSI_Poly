@@ -63,6 +63,16 @@ input:focus {
   max-width: 220px;
 }
 
+.readonly-value {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 .desc {
   color: var(--muted);
   line-height: 1.6;
