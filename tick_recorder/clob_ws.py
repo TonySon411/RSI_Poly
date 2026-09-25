@@ -80,7 +80,12 @@ class BookStream:
         if not new_ids:
             return
         self._subscribed.update(new_ids)
-        self._send({"assets_ids": new_ids, "type": "market", "operation": "subscribe"})
+        # NOTE: {"assets_ids": [...], "type": "market", "operation": "subscribe"}
+        # (the combined form) is silently ignored by Polymarket's server when
+        # sent on an already-open connection -- confirmed by direct testing.
+        # Only the plain {"assets_ids": [...], "type": "market"} form (the
+        # same one _on_open sends) actually gets a response.
+        self._send({"assets_ids": new_ids, "type": "market"})
 
     def unsubscribe(self, asset_ids: list[str]) -> None:
         old_ids = [a for a in asset_ids if a in self._subscribed]

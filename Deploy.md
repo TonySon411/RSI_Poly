@@ -102,13 +102,15 @@ mode only ever makes unauthenticated GET requests to Bybit/Gamma/CLOB.
 
 ```bash
 source .venv/bin/activate
-python fetch_data.py    # bulk-downloads all 7 symbols x 4 timeframes from Bybit
+python fetch_data.py              # bulk-downloads all 7 symbols x 4 timeframes, 2026-01-01 onward
+python fetch_historical_data.py   # optional: backfill 5m/15m further back, to 2023-01-01
 deactivate
 ```
 
 Skippable — the dashboard also fetches/extends this cache on demand — but
-doing it once up front means the first Backtest click on the server isn't
-slow.
+doing it once up front means the first Backtest/ATR Backtest click on the
+server isn't slow. Both scripts only fetch what's missing, so they're safe
+to re-run any time (e.g. as a periodic top-up cron job).
 
 ## 6. Start it under PM2
 
@@ -179,6 +181,24 @@ pm2 restart rsi-dashboard rsi-recorder
 
 If `topbot` itself was updated too, just `git pull` inside `~/polymarket/topbot`
 — no reinstall needed there since it's only read via `sys.path`, never installed.
+
+## 10. Clearing recorded tick data
+
+```bash
+source .venv/bin/activate
+python clearRecordedData.py                 # all symbols, asks to confirm
+python clearRecordedData.py BTC ETH          # only these symbols
+python clearRecordedData.py BTC --timeframe 5m
+python clearRecordedData.py --all --yes      # skip the confirmation prompt
+deactivate
+```
+
+Deletes only `data/<SYMBOL>/<5m|15m>/*.json` (the tick recordings) — never
+the Bybit CSV cache or `templates.db`. Worth running after any fix to
+`tick_recorder/`, so old/incomplete recordings don't sit alongside clean
+ones and skew the Live Backtest tab's coverage stats. Safe to run whether or
+not `rsi-recorder` is currently running, but for a clean cutover: `pm2 stop
+rsi-recorder`, clear, `pm2 restart rsi-recorder`.
 
 ## Troubleshooting
 

@@ -1,5 +1,13 @@
 {
   "atr_buckets": [
+    { "min_atr": 2.0, "max_atr": 2.5, "overbought": 99, "oversold": 24 },
+    { "min_atr": 3.5, "max_atr": 4.0, "overbought": 82, "oversold": 28 },
+    { "min_atr": 4.5, "max_atr": 5.0, "overbought": 81, "oversold": 1 },
+    { "min_atr": 5.0, "max_atr": 5.5, "overbought": 99, "oversold": 21 },
+    { "min_atr": 5.5, "max_atr": 6.0, "overbought": 82, "oversold": 1 },
+    { "min_atr": 6.5, "max_atr": 7.0, "overbought": 76, "oversold": 17 },
+    { "min_atr": 8.0, "max_atr": 8.5, "overbought": 71, "oversold": 28 },
+    { "min_atr": 8.5, "max_atr": 9.0, "overbought": 62, "oversold": 1 },
     { "min_atr": 13.0, "max_atr": 13.5, "overbought": 60, "oversold": 1 }
   ]
 }
