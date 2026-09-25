@@ -1,11 +1,20 @@
 """Real-time order-book streaming over Polymarket's CLOB "market" websocket
-channel. Ported from the Up_Down_both project's bot/clob_ws.py, unchanged
-aside from the import path.
+channel.
 
   - URL: wss://ws-subscriptions-clob.polymarket.com/ws/market
-  - Subscribe: {"assets_ids": [<token_id>, ...], "type": "market"}; add/drop
-    ids on a live connection with {"assets_ids": [...], "operation":
-    "subscribe"|"unsubscribe"} instead of reconnecting.
+  - Subscribe: {"assets_ids": [<token_id>, ...], "type": "market"}, sent as
+    the very first message right after the connection opens.
+  - IMPORTANT (confirmed by direct testing, contradicting the documented
+    incremental-update messages): Polymarket's server only ever honors the
+    *first* subscribe message sent on a given connection. Any later message
+    on that same connection -- whether {"operation": "subscribe"|
+    "unsubscribe"} or even a second plain {"type": "market"} message with a
+    different asset_ids list -- is silently ignored; the connection just
+    keeps streaming whatever it was first subscribed to. So changing which
+    tokens are being watched requires closing the connection and opening a
+    new one, relying on its fresh on_open to send the new set as that
+    connection's one-and-only honored message. subscribe()/unsubscribe()
+    below do exactly that instead of trying to update a live connection.
   - Heartbeat is application-level, not a websocket ping frame: send the text
     "PING" every 10s, server replies "PONG".
   - "book" events carry a full bids/asks snapshot for one asset_id. No
@@ -80,12 +89,7 @@ class BookStream:
         if not new_ids:
             return
         self._subscribed.update(new_ids)
-        # NOTE: {"assets_ids": [...], "type": "market", "operation": "subscribe"}
-        # (the combined form) is silently ignored by Polymarket's server when
-        # sent on an already-open connection -- confirmed by direct testing.
-        # Only the plain {"assets_ids": [...], "type": "market"} form (the
-        # same one _on_open sends) actually gets a response.
-        self._send({"assets_ids": new_ids, "type": "market"})
+        self._reconnect()
 
     def unsubscribe(self, asset_ids: list[str]) -> None:
         old_ids = [a for a in asset_ids if a in self._subscribed]
@@ -94,7 +98,12 @@ class BookStream:
         self._subscribed.difference_update(old_ids)
         for asset_id in old_ids:
             self._tops.pop(asset_id, None)
-        self._send({"assets_ids": old_ids, "operation": "unsubscribe"})
+        # No network message here on purpose -- see the module docstring.
+        # recorder.py always calls subscribe() for the next window right
+        # after this, which is what actually applies the change (by
+        # reconnecting). If it doesn't, the old tokens just keep streaming
+        # briefly on the still-open connection and are silently ignored by
+        # the caller (they're no longer in this record's snapshots dict).
 
     def close(self) -> None:
         self._stop = True
@@ -104,12 +113,15 @@ class BookStream:
             except Exception:  # noqa: BLE001 - best-effort on shutdown
                 pass
 
-    def _send(self, payload: dict) -> None:
+    def _reconnect(self) -> None:
+        """Force the connection closed so _run_forever opens a fresh one,
+        whose on_open sends the current _subscribed set as its first (and
+        only-honored) message."""
         ws = self._ws
-        if ws is not None and ws.sock and ws.sock.connected:
+        if ws is not None:
             try:
-                ws.send(json.dumps(payload))
-            except Exception:  # noqa: BLE001 - dropped mid-send; _on_open resubscribes on reconnect
+                ws.close()
+            except Exception:  # noqa: BLE001 - best-effort; _run_forever reconnects either way
                 pass
 
     def _on_open(self, ws):
